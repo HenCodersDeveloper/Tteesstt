@@ -23,11 +23,76 @@ const upload = multer({ storage: multer.memoryStorage() });
 // Route utama dengan form HTML sederhana
 app.get("/", (req, res) => {
   res.send(`
-    <h1>Upload File to NevaCloud</h1>
-    <form action="/upload" method="post" enctype="multipart/form-data">
-      <input type="file" name="file" required />
-      <button type="submit">Upload</button>
-    </form>
+    <html>
+    <head>
+      <style>
+        body {
+          font-family: Arial, sans-serif;
+          padding: 20px;
+        }
+        h1 {
+          color: #333;
+        }
+        #progressWrapper {
+          margin-top: 20px;
+          width: 100%;
+        }
+        #progressBar {
+          width: 100%;
+          height: 20px;
+          margin-top: 10px;
+        }
+        #progressPercentage {
+          display: block;
+          text-align: center;
+          margin-top: 5px;
+          font-weight: bold;
+        }
+        form {
+          margin-bottom: 20px;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Upload File to NevaCloud</h1>
+      <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+        <input type="file" name="file" required />
+        <button type="submit">Upload</button>
+      </form>
+      <div id="progressWrapper" style="display:none;">
+        <progress id="progressBar" value="0" max="100"></progress>
+        <span id="progressPercentage">0%</span>
+      </div>
+      <script>
+        const form = document.getElementById('uploadForm');
+        form.addEventListener('submit', function(event) {
+          event.preventDefault();
+          const formData = new FormData(form);
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', '/upload');
+          
+          xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+              const percent = (e.loaded / e.total) * 100;
+              document.getElementById('progressWrapper').style.display = 'block';
+              document.getElementById('progressBar').value = percent;
+              document.getElementById('progressPercentage').textContent = Math.round(percent) + '%';
+            }
+          };
+          
+          xhr.onload = function() {
+            if (xhr.status === 200) {
+              alert('File uploaded successfully!');
+            } else {
+              alert('Error uploading file.');
+            }
+          };
+          
+          xhr.send(formData);
+        });
+      </script>
+    </body>
+    </html>
   `);
 });
 
@@ -40,16 +105,23 @@ app.post("/upload", upload.single("file"), async (req, res) => {
       return res.status(400).send("No file uploaded.");
     }
 
-    // Konfigurasi parameter unggahan
     const params = {
       Bucket: process.env.BUCKET_NAME,
       Key: file.originalname,
       Body: file.buffer,
     };
 
-    // Unggah file ke NevaCloud
-    const data = await s3.upload(params).promise();
-    res.send(`File uploaded successfully: <a href="${data.Location}" target="_blank">${data.Location}</a>`);
+    // Unggah file ke NevaCloud dengan mengaktifkan progress tracking
+    s3.upload(params)
+      .on('httpUploadProgress', (progress) => {
+        console.log(`Uploaded ${progress.loaded} of ${progress.total} bytes`);
+      })
+      .send((err, data) => {
+        if (err) {
+          return res.status(500).send("Error uploading file.");
+        }
+        res.send(`File uploaded successfully: <a href="${data.Location}" target="_blank">${data.Location}</a>`);
+      });
   } catch (error) {
     console.error(error);
     res.status(500).send("Error uploading file.");
@@ -58,5 +130,5 @@ app.post("/upload", upload.single("file"), async (req, res) => {
 
 // Jalankan server
 app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
+  console.log(`Server running at http://localhost:${port}`);
 });
