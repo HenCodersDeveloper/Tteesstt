@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: nevacloud-uploader
+    env: node
+    region: singapore  # Pilih lokasi server Render (ganti sesuai kebutuhan)
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
